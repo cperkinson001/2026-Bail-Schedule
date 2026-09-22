@@ -1,0 +1,90 @@
+name: Monthly Bail Schedule Check
+
+# Runs on the 1st of every month, and can also be triggered manually
+# from the Actions tab ("Run workflow").
+on:
+  schedule:
+    - cron: '0 13 1 * *'   # 1st of each month, 13:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  check-for-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download current source PDFs
+        run: |
+          curl -sL -o /tmp/felony.pdf "https://lascpubstorage.blob.core.windows.net/cpw/LIBOPSCriminal-32-FelonyBailSchedule.pdf"
+          curl -sL -o /tmp/misdemeanor.pdf "https://lascpubstorage.blob.core.windows.net/cpw/LIBOPSCriminal-54-MisdemeanorBailSchedule.pdf"
+
+      - name: Compute hashes of downloaded PDFs
+        id: hashes
+        run: |
+          FELONY_HASH=$(sha256sum /tmp/felony.pdf | cut -d' ' -f1)
+          MISD_HASH=$(sha256sum /tmp/misdemeanor.pdf | cut -d' ' -f1)
+          echo "felony_hash=$FELONY_HASH" >> "$GITHUB_OUTPUT"
+          echo "misd_hash=$MISD_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Compare against stored metadata
+        id: compare
+        run: |
+          python3 scripts/check_meta.py \
+            --felony-hash "${{ steps.hashes.outputs.felony_hash }}" \
+            --misd-hash "${{ steps.hashes.outputs.misd_hash }}"
+
+      - name: Save fetched PDFs for review (only when changed)
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          mkdir -p pending-review
+          cp /tmp/felony.pdf pending-review/felony-latest.pdf
+          cp /tmp/misdemeanor.pdf pending-review/misdemeanor-latest.pdf
+
+      - name: Commit metadata (and any pending-review PDFs)
+        run: |
+          git config user.name "bail-schedule-bot"
+          git config user.email "actions@github.com"
+          git add meta.json pending-review 2>/dev/null || git add meta.json
+          git diff --cached --quiet || git commit -m "chore: monthly bail schedule check [skip ci]"
+          git push
+
+      - name: Open an issue if the source PDFs changed
+        if: steps.compare.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const today = new Date().toISOString().slice(0, 10);
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Bail schedule source PDFs changed — review needed (${today})`,
+              labels: ['data-update'],
+              body: [
+                'The monthly check detected that the official LA County bail schedule PDF(s) have changed since the last check.',
+                '',
+                '**This does not update the app automatically.** Structured re-transcription is done by a',
+                'human (or Claude/an assistant) reviewing the new PDF against `data.js`, because silently',
+                're-parsing a legal bail-amount table carries real risk of introducing wrong figures.',
+                '',
+                'To update the app:',
+                '1. Download the latest PDFs (saved to `pending-review/` in this commit, or from the links below).',
+                '2. Diff them against the previous version to see what changed.',
+                '3. Update `scripts/build_felony.py` / `scripts/build_misd1.py` / `scripts/build_misd2.py` and regenerate `data.js` (see README).',
+                '4. Update the "Effective" date shown in `index.html` and `meta.json`.',
+                '5. Close this issue.',
+                '',
+                'Felony PDF: https://lascpubstorage.blob.core.windows.net/cpw/LIBOPSCriminal-32-FelonyBailSchedule.pdf',
+                'Misdemeanor PDF: https://lascpubstorage.blob.core.windows.net/cpw/LIBOPSCriminal-54-MisdemeanorBailSchedule.pdf',
+                'General bail schedule page: https://www.lacourt.ca.gov/pages/lp/criminal/cp/bail-schedule',
+              ].join('\n'),
+            });

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LA County Bail Schedule Search</title>
+<style>
+  :root{
+    --navy:#0f1f3d;
+    --navy-light:#1c3564;
+    --gold:#b8862c;
+    --bg:#f5f6f8;
+    --card:#ffffff;
+    --border:#e0e2e7;
+    --text:#1a1d23;
+    --muted:#6b7280;
+    --cr:#1a7f37;
+    --br:#b8860b;
+    --mr:#c0392b;
+    --amt:#1c3564;
+    --ineligible:#7a0e0e;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    background:linear-gradient(135deg,var(--navy),var(--navy-light));
+    color:#fff;
+    padding:28px 20px 24px;
+    text-align:center;
+  }
+  header h1{
+    margin:0 0 6px;
+    font-size:1.5rem;
+    font-weight:700;
+    letter-spacing:0.3px;
+  }
+  header p{
+    margin:0;
+    font-size:0.88rem;
+    color:#c7cfe0;
+  }
+  .container{
+    max-width:900px;
+    margin:0 auto;
+    padding:20px 16px 60px;
+  }
+  .search-panel{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:16px;
+    margin-top:-30px;
+    box-shadow:0 4px 18px rgba(15,31,61,0.12);
+  }
+  .search-row{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  #searchInput{
+    flex:1 1 240px;
+    padding:12px 14px;
+    font-size:1rem;
+    border:1.5px solid var(--border);
+    border-radius:8px;
+    outline:none;
+    transition:border-color .15s;
+  }
+  #searchInput:focus{
+    border-color:var(--navy-light);
+  }
+  .filter-row{
+    display:flex;
+    gap:8px;
+    margin-top:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .chip{
+    border:1.5px solid var(--border);
+    background:#fff;
+    padding:6px 12px;
+    border-radius:999px;
+    font-size:0.82rem;
+    cursor:pointer;
+    color:var(--muted);
+    user-select:none;
+    transition:all .12s;
+  }
+  .chip.active{
+    background:var(--navy);
+    color:#fff;
+    border-color:var(--navy);
+  }
+  .chip:hover:not(.active){
+    border-color:var(--navy-light);
+    color:var(--navy);
+  }
+  select#codeFilter{
+    margin-left:auto;
+    padding:6px 10px;
+    border-radius:8px;
+    border:1.5px solid var(--border);
+    font-size:0.82rem;
+    color:var(--text);
+    background:#fff;
+  }
+  .result-count{
+    margin:16px 2px 10px;
+    font-size:0.85rem;
+    color:var(--muted);
+  }
+  .results{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .result-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 16px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.03);
+  }
+  .result-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    margin-bottom:6px;
+  }
+  .section-tag{
+    font-weight:700;
+    font-size:0.95rem;
+    color:var(--navy);
+  }
+  .code-tag{
+    font-size:0.72rem;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    margin-top:2px;
+  }
+  .type-badge{
+    font-size:0.68rem;
+    font-weight:700;
+    padding:2px 8px;
+    border-radius:5px;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    white-space:nowrap;
+  }
+  .type-felony{ background:#fde8e8; color:#a3231f; }
+  .type-misdemeanor{ background:#e7edfb; color:#1c3564; }
+  .description{
+    font-size:0.92rem;
+    line-height:1.4;
+    margin:6px 0 10px;
+    color:#2b2e36;
+  }
+  .protocol-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .protocol-badge{
+    font-weight:700;
+    font-size:0.78rem;
+    padding:4px 10px;
+    border-radius:6px;
+    color:#fff;
+    letter-spacing:0.3px;
+  }
+  .protocol-CR{ background:var(--cr); }
+  .protocol-BR{ background:var(--br); }
+  .protocol-MR{ background:var(--mr); }
+  .protocol-AMOUNT{ background:var(--amt); }
+  .protocol-OTHER{ background:#555; }
+  .protocol-INELIGIBLE{ background:var(--ineligible); }
+  .protocol-label{
+    font-size:0.8rem;
+    color:var(--muted);
+  }
+  .empty-state{
+    text-align:center;
+    color:var(--muted);
+    padding:50px 20px;
+    font-size:0.95rem;
+  }
+  .status-banner{
+    max-width:900px;
+    margin:14px auto 0;
+    padding:10px 16px;
+    border-radius:8px;
+    font-size:0.8rem;
+    display:none;
+    align-items:center;
+    gap:8px;
+  }
+  .status-banner.show{ display:flex; }
+  .status-banner.ok{
+    background:#eef7ee;
+    color:#1a7f37;
+    border:1px solid #cdeacd;
+  }
+  .status-banner.pending{
+    background:#fff6e5;
+    color:#8a5a00;
+    border:1px solid #f3dca3;
+  }
+  .status-banner a{ color:inherit; font-weight:700; }
+  .legend{
+    margin-top:22px;
+    font-size:0.78rem;
+    color:var(--muted);
+    border-top:1px solid var(--border);
+    padding-top:14px;
+    line-height:1.7;
+  }
+  .legend b{color:var(--text);}
+  footer{
+    text-align:center;
+    font-size:0.72rem;
+    color:var(--muted);
+    padding:20px;
+  }
+  footer a{ color: var(--navy-light); }
+  mark{
+    background:#fff3b0;
+    padding:0 1px;
+    border-radius:2px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LA County Bail Schedule Search</h1>
+  <p>Felony &amp; Misdemeanor Pre-Arraignment Release Protocol — Eff. Jan 1, 2026</p>
+</header>
+
+<div id="statusBanner" class="status-banner"></div>
+
+<div class="container">
+  <div class="search-panel">
+    <div class="search-row">
+      <input type="text" id="searchInput" placeholder="Search by code section (e.g. 273.5) or description (e.g. burglary)…" autocomplete="off">
+    </div>
+    <div class="filter-row">
+      <span class="chip active" data-type="all">All</span>
+      <span class="chip" data-type="felony">Felony</span>
+      <span class="chip" data-type="misdemeanor">Misdemeanor</span>
+      <select id="codeFilter">
+        <option value="all">All Codes</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="result-count" id="resultCount"></div>
+  <div class="results" id="results"></div>
+
+  <div class="legend">
+    <b>CR</b> = Cite and Release &nbsp;•&nbsp; <b>BR</b> = Book and Release &nbsp;•&nbsp; <b>MR</b> = Magistrate Review &nbsp;•&nbsp; Dollar amounts = required financial condition of release.
+    <br>Source: Superior Court of California, County of Los Angeles — Felony Bail Schedule &amp; Misdemeanor Bail Schedule, effective January 1, 2026.
+    This tool is for quick reference only; always confirm against the official schedule for operational decisions.
+  </div>
+</div>
+
+<footer>
+  Data compiled from the official LA County Superior Court bail schedules (lacourt.ca.gov). Not legal advice.
+</footer>
+
+<script src="data.js"></script>
+<script>
+  const searchInput = document.getElementById('searchInput');
+  const resultsEl = document.getElementById('results');
+  const resultCountEl = document.getElementById('resultCount');
+  const codeFilterEl = document.getElementById('codeFilter');
+  const chips = document.querySelectorAll('.chip');
+
+  let currentType = 'all';
+  let currentCode = 'all';
+
+  // Populate code filter dropdown
+  const codes = [...new Set(BAIL_DATA.map(d => d.code))].sort();
+  codes.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    codeFilterEl.appendChild(opt);
+  });
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentType = chip.dataset.type;
+      render();
+    });
+  });
+
+  codeFilterEl.addEventListener('change', () => {
+    currentCode = codeFilterEl.value;
+    render();
+  });
+
+  function protocolClass(protocol){
+    const p = protocol.trim().toUpperCase();
+    if(p === 'CR') return 'protocol-CR';
+    if(p === 'BR') return 'protocol-BR';
+    if(p === 'MR') return 'protocol-MR';
+    if(p.startsWith('$')) return 'protocol-AMOUNT';
+    if(p.includes('INELIGIBLE')) return 'protocol-INELIGIBLE';
+    return 'protocol-OTHER';
+  }
+
+  function protocolLabel(protocol){
+    const p = protocol.trim().toUpperCase();
+    if(p === 'CR') return 'Cite and Release';
+    if(p === 'BR') return 'Book and Release';
+    if(p === 'MR') return 'Magistrate Review';
+    if(p.startsWith('$')) return 'Financial condition of release';
+    if(p.includes('INELIGIBLE')) return 'Not eligible for pre-arraignment release';
+    return 'See schedule';
+  }
+
+  function highlight(text, term){
+    if(!term) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('(' + safeTerm + ')', 'ig');
+    return escaped.replace(re, '<mark>$1</mark>');
+  }
+
+  function escapeHtml(str){
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function render(){
+    const term = searchInput.value.trim().toLowerCase();
+
+    let filtered = BAIL_DATA.filter(d => {
+      if(currentType !== 'all' && d.type !== currentType) return false;
+      if(currentCode !== 'all' && d.code !== currentCode) return false;
+      if(!term) return true;
+      return d.section.toLowerCase().includes(term) || d.description.toLowerCase().includes(term);
+    });
+
+    // limit initial render if no search term and count is huge, to keep it snappy
+    const showLimit = term ? filtered.length : Math.min(filtered.length, 150);
+    resultCountEl.textContent = filtered.length + ' result' + (filtered.length===1?'':'s') +
+      (!term && filtered.length > showLimit ? ' (showing first ' + showLimit + ' — type to narrow)' : '');
+
+    if(filtered.length === 0){
+      resultsEl.innerHTML = '<div class="empty-state">No matching offenses found. Try a different section number or keyword.</div>';
+      return;
+    }
+
+    const toRender = filtered.slice(0, showLimit);
+
+    resultsEl.innerHTML = toRender.map(d => `
+      <div class="result-card">
+        <div class="result-top">
+          <div>
+            <div class="section-tag">§ ${highlight(d.section, term)}</div>
+            <div class="code-tag">${escapeHtml(d.code)}</div>
+          </div>
+          <span class="type-badge type-${d.type}">${d.type}</span>
+        </div>
+        <div class="description">${highlight(d.description, term)}</div>
+        <div class="protocol-row">
+          <span class="protocol-badge ${protocolClass(d.protocol)}">${escapeHtml(d.protocol)}</span>
+          <span class="protocol-label">${protocolLabel(d.protocol)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  searchInput.addEventListener('input', render);
+
+  render();
+
+  // Freshness / update-pending banner, driven by meta.json.
+  // meta.json is refreshed monthly by a scheduled GitHub Action that checks
+  // the official source PDFs for changes (see .github/workflows/).
+  fetch('meta.json', {cache: 'no-store'})
+    .then(r => r.ok ? r.json() : null)
+    .then(meta => {
+      if (!meta) return;
+      const banner = document.getElementById('statusBanner');
+
+      if (meta.update_pending) {
+        banner.className = 'status-banner pending show';
+        banner.innerHTML = `⚠️ The official source PDFs changed on ${escapeHtml(meta.last_changed || 'an unknown date')} and this dataset may be out of date. Check the repository's Issues tab for the pending review.`;
+      } else if (meta.last_checked) {
+        banner.className = 'status-banner ok show';
+        banner.innerHTML = `✓ Source PDFs last verified unchanged on ${escapeHtml(meta.last_checked)} · Schedule effective ${escapeHtml(meta.schedule_effective_date || '')}`;
+      }
+    })
+    .catch(() => { /* meta.json not reachable (e.g. local file:// preview) — fail silently */ });
+</script>
+
+</body>
+</html>
